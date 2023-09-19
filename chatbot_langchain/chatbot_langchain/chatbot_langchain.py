@@ -33,7 +33,7 @@ def read_prompt_template(file_path: str) -> str:
 
 
 def kakao_sink_answer(question: str) -> str:
-    system = "assistant는 카카오싱크 api 사용법을 설명 해주는 고객 지원 챗봇으로 동작한다. 고객의카카오싱크 api 사용법에 관한 질문에 대해 가장 적절하고 간결한 답변을 출력한다."
+    system = "assistant는 카카오싱크 api 사용법을 설명 해주는 고객 지원 챗봇으로 동작한다. 고객의카카오싱크 api 사용법에 관한 질문에 대해 가장 적절한 답변을 200자 이내로 출력한다."
 
     chat_llm = ChatOpenAI(streaming=True, verbose=True, temperature=1, max_tokens=500, model='gpt-3.5-turbo')
     chat_llm([SystemMessage(content=system)])
