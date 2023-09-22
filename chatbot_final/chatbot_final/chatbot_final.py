@@ -21,7 +21,6 @@ from langchain.vectorstores import Chroma
 import numpy as np
 
 # openai.api_key = "<YOUR_OPENAI_API_KEY
-# >"
 key = open('../api-key', 'r').readline()
 os.environ["OPENAI_API_KEY"] = key
 
@@ -40,8 +39,6 @@ _db = Chroma(
 _retriever = _db.as_retriever()
 
 llm = ChatOpenAI(temperature=0.1, max_tokens=200, model="gpt-3.5-turbo")
-
-print(INTENT_PROMPT_TEMPLATE)
 
 
 def create_chain(llm, template_path, output_key):
