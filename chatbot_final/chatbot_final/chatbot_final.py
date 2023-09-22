@@ -27,7 +27,7 @@ os.environ["OPENAI_API_KEY"] = key
 PROMPT_DIR = os.path.abspath("prompt_template")
 INTENT_PROMPT_TEMPLATE = os.path.join(PROMPT_DIR, "parse_intent.txt")
 INTENT_LIST_TXT = os.path.join(PROMPT_DIR, "intent_list.txt")
-KAKAO_SINK_PROMPT = os.path.join(PROMPT_DIR, "kakao_sink_prompt.txt")
+KAKAO_SYNC_PROMPT = os.path.join(PROMPT_DIR, "kakao_sync_prompt.txt")
 KAKAO_SOCIAL_PROMPT = os.path.join(PROMPT_DIR, "kakao_social_prompt.txt")
 KAKAO_CHANNEL_PROMPT = os.path.join(PROMPT_DIR, "kakao_channel_prompt.txt")
 
@@ -68,9 +68,9 @@ parse_intent_chain = create_chain(
     output_key="intent",
 )
 
-kakao_sink_chain = create_chain(
+kakao_sync_chain = create_chain(
     llm=llm,
-    template_path=KAKAO_SINK_PROMPT,
+    template_path=KAKAO_SYNC_PROMPT,
     output_key="output",
 )
 
@@ -103,9 +103,9 @@ def kakao_chatbot_answer(user_message: str) -> str:
     context["intent_list"] = read_prompt_template(INTENT_LIST_TXT)
     intent = parse_intent_chain.run(context)
 
-    if intent == "sink":
+    if intent == "sync":
         context["related_documents"] = query_db(context["user_message"])
-        answer = kakao_sink_chain.run(context)
+        answer = kakao_sync_chain.run(context)
     elif intent == "social":
         context["related_documents"] = query_db(context["user_message"])
         answer = kakao_social_chain.run(context)
