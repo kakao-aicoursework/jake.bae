@@ -1,0 +1,12 @@
+pynecone.db
+
+__pycache__/
+
+*.py[cod]
+
+.web
+
+chroma-persist
+
+
+
