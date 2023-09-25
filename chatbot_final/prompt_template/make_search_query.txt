@@ -1,0 +1,5 @@
+아래의 message 를 읽고 검색 엔진에 질의하기 위한 질문을 한 문장으로 답변해줘.
+
+{chat_history}
+User: {user_message}
+Answer:

@@ -18,7 +18,8 @@ from pprint import pprint
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
 from langchain.memory import ConversationBufferMemory, FileChatMessageHistory
-
+from langchain.tools import Tool
+from langchain.utilities import GoogleSearchAPIWrapper
 import numpy as np
 
 # openai.api_key = "<YOUR_OPENAI_API_KEY
@@ -32,6 +33,9 @@ KAKAO_SYNC_PROMPT = os.path.join(PROMPT_DIR, "kakao_sync_prompt.txt")
 KAKAO_SOCIAL_PROMPT = os.path.join(PROMPT_DIR, "kakao_social_prompt.txt")
 KAKAO_CHANNEL_PROMPT = os.path.join(PROMPT_DIR, "kakao_channel_prompt.txt")
 DEFAULT_RESPONSE = os.path.join(PROMPT_DIR, "default_response.txt")
+MAKE_SEARCH_QUERY_PROMPT_TEMPLATE = os.path.join(PROMPT_DIR, "make_search_query.txt")
+SEARCH_VALUE_CHECK_PROMPT_TEMPLATE = os.path.join(PROMPT_DIR, "search_value_check.txt")
+SEARCH_COMPRESSION_PROMPT_TEMPLATE = os.path.join(PROMPT_DIR, "search_compress.txt")
 
 CHROMA_COLLECTION_NAME = "kakao-bot"
 CHROMA_PERSIST_DIR = os.path.abspath("chroma-persist")
@@ -47,6 +51,20 @@ HISTORY_DIR = os.path.abspath("chat_histories")
 llm = ChatOpenAI(temperature=0.5, max_tokens=1000, model="gpt-3.5-turbo")
 
 # default_chain = ConversationChain(llm=llm, output_key="output")
+
+google_api_key = open('../google-api-key', 'r').readline()
+google_cse_id = open('../google-cse-id', 'r').readline()
+
+search = GoogleSearchAPIWrapper(
+    google_api_key=os.getenv("GOOGLE_API_KEY", google_api_key),
+    google_cse_id=os.getenv("GOOGLE_CSE_ID", google_cse_id)
+)
+
+search_tool = Tool(
+    name="Google Search",
+    description="Search Google for recent results.",
+    func=search.run,
+)
 
 def create_chain(llm, template_path, output_key):
     return LLMChain(
@@ -95,6 +113,21 @@ default_chain = create_chain(
     template_path=DEFAULT_RESPONSE,
     output_key="output",
 )
+make_search_query_chain = create_chain(
+    llm=llm,
+    template_path=MAKE_SEARCH_QUERY_PROMPT_TEMPLATE,
+    output_key="output",
+)
+search_value_check_chain = create_chain(
+    llm=llm,
+    template_path=SEARCH_VALUE_CHECK_PROMPT_TEMPLATE,
+    output_key="output",
+)
+search_compression_chain = create_chain(
+    llm=llm,
+    template_path=SEARCH_COMPRESSION_PROMPT_TEMPLATE,
+    output_key="output",
+)
 
 
 def query_db(query: str, use_retriever: bool = False) -> list[str]:
@@ -131,6 +164,19 @@ def get_chat_history(conversation_id: str):
     return memory.buffer
 
 
+def query_web_search(context: dict) -> str:
+    question = make_search_query_chain.run(context)
+    context["question"] = question
+    context["related_web_search_results"] = search_tool.run(context["question"])
+
+    has_value = search_value_check_chain.run(context)
+
+    if has_value == "Y":
+        return search_compression_chain.run(context)
+    else:
+        return "답변을 위한 검색 결과가 없습니다."
+
+
 def kakao_chatbot_answer(user_message: str, conversation_id: str = 'fa1010') -> str:
     context = dict(user_message=user_message)
     context["input"] = context["user_message"]
@@ -148,6 +194,8 @@ def kakao_chatbot_answer(user_message: str, conversation_id: str = 'fa1010') -> 
     elif intent == "channel":
         context["related_documents"] = query_db(context["user_message"])
         answer = kakao_channel_chain.run(context)
+    elif intent == "search":
+        answer = query_web_search(context)
     else:
         answer = default_chain.run(context)
 
