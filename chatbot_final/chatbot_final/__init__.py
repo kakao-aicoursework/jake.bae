@@ -1,6 +1,5 @@
 import os
 
-print("시작이다!!!")
 
 # openai.api_key = "<YOUR_OPENAI_API_KEY
 key = open('../api-key', 'r').readline()
@@ -44,7 +43,6 @@ def upload_embedding_from_file(file_path):
 
 def upload_embeddings_from_dir(dir_path):
     failed_upload_files = []
-    print("파일 업로드?")
     print(dir_path)
     for root, dirs, files in os.walk(dir_path):
         for file in files:

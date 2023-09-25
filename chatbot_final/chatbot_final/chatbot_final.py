@@ -17,6 +17,7 @@ from pprint import pprint
 
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
+from langchain.memory import ConversationBufferMemory, FileChatMessageHistory
 
 import numpy as np
 
@@ -30,6 +31,7 @@ INTENT_LIST_TXT = os.path.join(PROMPT_DIR, "intent_list.txt")
 KAKAO_SYNC_PROMPT = os.path.join(PROMPT_DIR, "kakao_sync_prompt.txt")
 KAKAO_SOCIAL_PROMPT = os.path.join(PROMPT_DIR, "kakao_social_prompt.txt")
 KAKAO_CHANNEL_PROMPT = os.path.join(PROMPT_DIR, "kakao_channel_prompt.txt")
+DEFAULT_RESPONSE = os.path.join(PROMPT_DIR, "default_response.txt")
 
 CHROMA_COLLECTION_NAME = "kakao-bot"
 CHROMA_PERSIST_DIR = os.path.abspath("chroma-persist")
@@ -40,9 +42,11 @@ _db = Chroma(
 )
 _retriever = _db.as_retriever()
 
-llm = ChatOpenAI(temperature=0.1, max_tokens=200, model="gpt-3.5-turbo")
+HISTORY_DIR = os.path.abspath("chat_histories")
 
-default_chain = ConversationChain(llm=llm, output_key="output")
+llm = ChatOpenAI(temperature=0.5, max_tokens=1000, model="gpt-3.5-turbo")
+
+# default_chain = ConversationChain(llm=llm, output_key="output")
 
 def create_chain(llm, template_path, output_key):
     return LLMChain(
@@ -86,6 +90,12 @@ kakao_channel_chain = create_chain(
     output_key="output",
 )
 
+default_chain = create_chain(
+    llm=llm,
+    template_path=DEFAULT_RESPONSE,
+    output_key="output",
+)
+
 
 def query_db(query: str, use_retriever: bool = False) -> list[str]:
     if use_retriever:
@@ -97,10 +107,36 @@ def query_db(query: str, use_retriever: bool = False) -> list[str]:
     return str_docs
 
 
-def kakao_chatbot_answer(user_message: str) -> str:
+def load_conversation_history(conversation_id: str):
+    file_path = os.path.join(HISTORY_DIR, f"{conversation_id}.json")
+    return FileChatMessageHistory(file_path)
+
+
+def log_user_message(history: FileChatMessageHistory, user_message: str):
+    history.add_user_message(user_message)
+
+
+def log_bot_message(history: FileChatMessageHistory, bot_message: str):
+    history.add_ai_message(bot_message)
+
+
+def get_chat_history(conversation_id: str):
+    history = load_conversation_history(conversation_id)
+    memory = ConversationBufferMemory(
+        memory_key="chat_history",
+        input_key="user_message",
+        chat_memory=history,
+    )
+
+    return memory.buffer
+
+
+def kakao_chatbot_answer(user_message: str, conversation_id: str = 'fa1010') -> str:
     context = dict(user_message=user_message)
     context["input"] = context["user_message"]
     context["intent_list"] = read_prompt_template(INTENT_LIST_TXT)
+    context["chat_history"] = get_chat_history(conversation_id)
+
     intent = parse_intent_chain.run(context)
 
     if intent == "sync":
@@ -113,14 +149,17 @@ def kakao_chatbot_answer(user_message: str) -> str:
         context["related_documents"] = query_db(context["user_message"])
         answer = kakao_channel_chain.run(context)
     else:
-        answer = default_chain.run(context["user_message"])
+        answer = default_chain.run(context)
 
     return answer
 
 
-def chatbot_answer_using_chatgpt(question: str) -> str:
-    response = kakao_chatbot_answer(question)
-    return response
+def chatbot_answer_using_chatgpt(question: str, conversation_id: str = 'fa1010') -> str:
+    history_file = load_conversation_history(conversation_id)
+    answer = kakao_chatbot_answer(question, conversation_id)
+    log_user_message(history_file, question)
+    log_bot_message(history_file, answer)
+    return answer
 
 
 class Message(Base):
